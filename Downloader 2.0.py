@@ -3,6 +3,13 @@ import sys
 import os
 import re
 
+# Download directory (change if needed)
+audio_path = '2. To burn/'
+video_path = '3. Videos/'
+
+# Path to ffmpeg (change if needed)
+ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
+
 # Function to check if a package is installed
 def check_and_install(package):
     try:
@@ -28,12 +35,6 @@ def is_ffmpeg_installed():
         sys.exit(1)
     else:
         print("ffmpeg is installed.")
-# Download directory
-audio_path = '2. To burn/'
-video_path = '3. Videos/'
-
-# Path to ffmpeg
-ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'  # Update this to the correct path if needed
 
 # Methods
 def sanitize_filename(filename):
@@ -49,19 +50,24 @@ def my_hook(d):
 def audio_playlists():
     print("Input link:")
     link = input().strip()
+
     ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': os.path.join(audio_path, '%(playlist_title)s', '%(playlist_index)s - %(title)s.%(ext)s'),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'noplaylist': False,
-        'ignoreerrors': True,
-        'quiet': True,
-        'ffmpeg_location': ffmpeg_path,
-        'progress_hooks': [my_hook]
+    'format': 'bestaudio/best',
+    'outtmpl': os.path.join(audio_path, '%(playlist_title)s', '%(title)s.%(ext)s'),
+    'postprocessors': [{
+    'key': 'FFmpegExtractAudio', 
+    'preferredcodec': 'mp3', 
+    'preferredquality': '192',
+    },
+    {
+    'key': 'FFmpegMetadata', 'add_metadata': True
+    }],
+    'parse-metadata': 'title:%(title)s;playlist_title:%(album)s;playlist_index:%(track)s', 
+    'noplaylist': False, 
+    'ignoreerrors': True, 
+    'quiet': True, 
+    'ffmpeg_location': ffmpeg_path, 
+    'progress_hooks': [my_hook]
     }
     with YoutubeDL(ydl_opts) as ydl:
         ydl.download([link])
