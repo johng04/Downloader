@@ -1,4 +1,4 @@
-# Version 3.1
+# Version 3.0
 
 import os
 import subprocess
@@ -53,6 +53,8 @@ def my_hook(d):
 
 # === Download logic ===
 def audio_playlists():
+    import shutil
+
     link = url_entry.get().strip()
     album_name = album_entry.get().strip()
     album_art = artwork_entry.get().strip()
@@ -77,32 +79,79 @@ def audio_playlists():
 
     for track_counter, track in enumerate(entries, start=1):
         track_title = track.get('title', f"Track {track_counter}")
+        artist_name = track.get('uploader', 'Unknown Artist')
         print(f"Downloading: {track_title}")
 
+        # Paths
+        temp_output = os.path.join(album_folder, f"{track_title}.%(ext)s")
+        final_output = os.path.join(album_folder, f"{track_title}.mp3")
+        temp_mp3 = os.path.join(album_folder, f"{track_title}.mp3")
+
+        # Download audio only
         ydl_opts_download = {
             'format': 'bestaudio/best',
-            'outtmpl': os.path.join(album_folder, '%(title)s.%(ext)s'),
+            'outtmpl': temp_output,
             'postprocessors': [
                 {
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
-                },
-                {
-                    'key': 'FFmpegMetadata',
-                    'add_metadata': True,
                 }
             ],
-            'postprocessor_args': ['-metadata', f'track={track_counter}'],
             'ffmpeg_location': ffmpeg_path,
             'progress_hooks': [my_hook],
-            'ignoreerrors': True,
             'quiet': True,
+            'ignoreerrors': True,
         }
 
         with YoutubeDL(ydl_opts_download) as ydl:
             ydl.download([track['url']])
 
+        # === Embed album art with ffmpeg ===
+        if (album_art):
+            tagged_output = os.path.join(album_folder, f"{track_title}_tagged.mp3")
+
+            ffmpeg_cmd = [
+                ffmpeg_path, '-y',
+                '-i', temp_mp3,          
+                '-i', album_art,
+                '-map', '0:a',
+                '-map', '1:v',
+                '-c', 'copy',
+                '-id3v2_version', '3',
+                '-metadata', f'title={track_title}',
+                '-metadata', f'album={album_name}',
+                '-metadata', f'artist={artist_name}',
+                '-metadata', f'track={track_counter}',
+                tagged_output
+            ]
+
+            subprocess.run(ffmpeg_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+
+            # Replace original with tagged
+            if os.path.exists(tagged_output):
+                os.remove(temp_mp3)
+                os.rename(tagged_output, final_output)
+        else:
+            tagged_output = os.path.join(album_folder, f"{track_title}_tagged.mp3")
+            ffmpeg_cmd = [
+                ffmpeg_path, '-y',
+                '-i', temp_mp3,          
+                '-metadata', f'title={track_title}',
+                '-metadata', f'album={album_name}',
+                '-metadata', f'artist={artist_name}',
+                '-metadata', f'track={track_counter}',
+                tagged_output
+            ]
+
+            subprocess.run(ffmpeg_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+
+            # Replace original with tagged
+            if os.path.exists(tagged_output):
+                os.remove(temp_mp3)
+                os.rename(tagged_output, final_output)
+    status_label.config(text=f"Download complete: {album_name}") 
+    
 def audio_singles():
     link = url_entry.get().strip()
     download_dir = download_dir_entry.get().strip()
