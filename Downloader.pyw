@@ -8,10 +8,6 @@ import threading
 import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from yt_dlp import YoutubeDL
-
-# === Config ===
-ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
 
 # === Dependency check ===
 def check_and_install(package):
@@ -29,6 +25,10 @@ def check_and_install(package):
 
 # Ensure yt-dlp is installed
 check_and_install("yt_dlp")
+from yt_dlp import YoutubeDL
+
+# === Config ===
+ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
 
 # Check if ffmpeg is installed
 try:
