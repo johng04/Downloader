@@ -1,9 +1,11 @@
 # Version 3.0
 
+#imports
 import os
 import subprocess
 import sys
 import threading
+import shutil
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from yt_dlp import YoutubeDL
@@ -29,20 +31,17 @@ def check_and_install(package):
 check_and_install("yt_dlp")
 
 # Check if ffmpeg is installed
-def is_ffmpeg_installed():
-    try:
-        subprocess.run(
-            [ffmpeg_path, "-version"],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        messagebox.showerror("Error", "ffmpeg not found. Please install ffmpeg and ensure it is in your PATH.")
-        sys.exit(1)
-
-is_ffmpeg_installed()
+try:
+    subprocess.run(
+        [ffmpeg_path, "-version"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        creationflags=subprocess.CREATE_NO_WINDOW
+    )
+except (subprocess.CalledProcessError, FileNotFoundError):
+    messagebox.showerror("Error", "ffmpeg not found. Please install ffmpeg and ensure it is in your PATH.")
+    sys.exit(1)
 
 # === Download hook ===
 def my_hook(d):
@@ -53,8 +52,6 @@ def my_hook(d):
 
 # === Download logic ===
 def audio_playlists():
-    import shutil
-
     link = url_entry.get().strip()
     album_name = album_entry.get().strip()
     album_art = artwork_entry.get().strip()
@@ -154,6 +151,8 @@ def audio_playlists():
     
 def audio_singles():
     link = url_entry.get().strip()
+    album_name = album_entry.get().strip()
+    album_art = artwork_entry.get().strip()
     download_dir = download_dir_entry.get().strip()
 
     if not link:
@@ -163,32 +162,75 @@ def audio_singles():
     status_label.config(text="Downloading song...")
     root.update_idletasks()
 
-    ydl_opts = {
+    ydl_opts_info = {'quiet': True}
+    with YoutubeDL(ydl_opts_info) as ydl:
+        info_dict = ydl.extract_info(link, download=False)
+        track_title = info_dict.get('title', 'Unknown Song')
+        artist_name = info_dict.get('uploader', 'Unknown Artist')
+        album_name = album_name if album_name else track_title
+
+    temp_output = os.path.join(download_dir, f"{track_title}.%(ext)s")
+    temp_mp3 = os.path.join(download_dir, f"{track_title}.mp3")
+    final_output = os.path.join(download_dir, f"{track_title}.mp3")
+
+    ydl_opts_download = {
         'format': 'bestaudio/best',
-        'outtmpl': os.path.join(download_dir, '%(title)s.%(ext)s'),
+        'outtmpl': temp_output,
         'postprocessors': [
             {
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
-            },
-            {
-                'key': 'FFmpegMetadata',
-                'add_metadata': True,
             }
         ],
-        'noplaylist': True,
-        'ignoreerrors': True,
-        'quiet': True,
         'ffmpeg_location': ffmpeg_path,
         'progress_hooks': [my_hook],
+        'quiet': True,
+        'ignoreerrors': True,
     }
 
-    with YoutubeDL(ydl_opts) as ydl:
+    with YoutubeDL(ydl_opts_download) as ydl:
         ydl.download([link])
+
+    tagged_output = os.path.join(download_dir, f"{track_title}_tagged.mp3")
+
+    if album_art:
+        ffmpeg_cmd = [
+            ffmpeg_path, '-y',
+            '-i', temp_mp3,
+            '-i', album_art,
+            '-map', '0:a', '-map', '1:v',
+            '-c', 'copy',
+            '-id3v2_version', '3',
+            '-metadata', f'title={track_title}',
+            '-metadata', f'album={album_name}',
+            '-metadata', f'artist={artist_name}',
+            tagged_output
+        ]
+    else:
+        ffmpeg_cmd = [
+            ffmpeg_path, '-y',
+            '-i', temp_mp3,
+            '-id3v2_version', '3',
+            '-metadata', f'title={track_title}',
+            '-metadata', f'album={album_name}',
+            '-metadata', f'artist={artist_name}',
+            tagged_output
+        ]
+
+    subprocess.run(ffmpeg_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+
+    if os.path.exists(tagged_output):
+        os.remove(temp_mp3)
+        os.rename(tagged_output, final_output)
+
+    status_label.config(text=f"Download complete: {track_title}")
+
 
 def video_playlists():
     link = url_entry.get().strip()
+    album_name = album_entry.get().strip()
+    album_art = artwork_entry.get().strip()
     download_dir = download_dir_entry.get().strip()
 
     if not link:
@@ -198,9 +240,14 @@ def video_playlists():
     status_label.config(text="Extracting video playlist...")
     root.update_idletasks()
 
+    # Default to using playlist title if no custom folder name is provided
+    album_name = album_name if album_name else '%(playlist_title)s'
+
+    outtmpl = os.path.join(download_dir, album_name, '%(playlist_index)s - %(title)s.%(ext)s')
+
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4',
-        'outtmpl': os.path.join(download_dir, '%(playlist_title)s', '%(playlist_index)s - %(title)s.%(ext)s'),
+        'outtmpl': outtmpl,
         'merge_output_format': 'mp4',
         'ignoreerrors': True,
         'quiet': True,
@@ -210,9 +257,13 @@ def video_playlists():
 
     with YoutubeDL(ydl_opts) as ydl:
         ydl.download([link])
-
+    
+    status_label.config(text=f"Download complete: {album_name}") 
+    
 def video_singles():
     link = url_entry.get().strip()
+    album_name = album_entry.get().strip()
+    album_art = artwork_entry.get().strip()
     download_dir = download_dir_entry.get().strip()
 
     if not link:
@@ -281,9 +332,9 @@ try:
 
     # Action buttons
     tk.Button(root, text="Download Audio Playlist", command=lambda: threading.Thread(target=audio_playlists).start()).pack(pady=5)
-    tk.Button(root, text="Download Single Song", command=audio_singles).pack(pady=5)
+    tk.Button(root, text="Download Single Song", command=lambda: threading.Thread(target=audio_singles).start()).pack(pady=5)
     tk.Button(root, text="Download Video Playlist", command=lambda: threading.Thread(target=video_playlists).start()).pack(pady=5)
-    tk.Button(root, text="Download Single Video", command=video_singles).pack(pady=5)
+    tk.Button(root, text="Download Single Video", command=lambda: threading.Thread(target=video_singles).start()).pack(pady=5)
 
     # Status label
     status_label = tk.Label(root, text="", fg="blue")
