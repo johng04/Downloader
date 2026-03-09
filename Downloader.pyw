@@ -12,6 +12,15 @@ from tkinter import filedialog, messagebox
 
 #Dependency check
 def check_and_install(package):
+    root = tk.Tk()
+    root.title("Updating")
+    root.geometry("250x80")
+
+    label = tk.Label(root, text=f"Updating {package}...")
+    label.pack(pady=20)
+
+    root.update()
+
     try:
         __import__(package)
         subprocess.check_call(
@@ -19,10 +28,14 @@ def check_and_install(package):
             creationflags=subprocess.CREATE_NO_WINDOW
         )
     except ImportError:
+        label.config(text=f"Installing {package}...")
+        root.update()
         subprocess.check_call(
             [sys.executable, "-m", "pip", "install", package],
             creationflags=subprocess.CREATE_NO_WINDOW
         )
+
+    root.destroy()
 
 # Ensure yt-dlp is installed
 check_and_install("yt_dlp")
