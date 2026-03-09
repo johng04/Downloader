@@ -42,18 +42,13 @@ check_and_install("yt_dlp")
 from yt_dlp import YoutubeDL
 
 # Check if ffmpeg is installed
-ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
-try:
-    subprocess.run(
-        [ffmpeg_path, "-version"],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        creationflags=subprocess.CREATE_NO_WINDOW
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ffmpeg_path = os.path.join(BASE_DIR, 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe')
+if not os.path.exists(ffmpeg_path):
+    messagebox.showwarning(
+        "Warning",
+        "ffmpeg.exe not found in the script folder. Some downloads may fail."
     )
-except (subprocess.CalledProcessError, FileNotFoundError):
-    messagebox.showerror("Error", "ffmpeg not found. Please install ffmpeg and ensure it is in same folder as the downloader.")
-    sys.exit(1)
 
 # Download hook
 def my_hook(d):
