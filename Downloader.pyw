@@ -1,4 +1,4 @@
-# Version 3.0
+# Version 3.10
 
 #imports
 import os
@@ -6,10 +6,11 @@ import subprocess
 import sys
 import threading
 import shutil
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox
 
-# === Dependency check ===
+#Dependency check
 def check_and_install(package):
     try:
         __import__(package)
@@ -27,10 +28,8 @@ def check_and_install(package):
 check_and_install("yt_dlp")
 from yt_dlp import YoutubeDL
 
-# === Config ===
-ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
-
 # Check if ffmpeg is installed
+ffmpeg_path = 'ffmpeg-master-latest-win64-gpl-shared/bin/ffmpeg.exe'
 try:
     subprocess.run(
         [ffmpeg_path, "-version"],
@@ -40,17 +39,29 @@ try:
         creationflags=subprocess.CREATE_NO_WINDOW
     )
 except (subprocess.CalledProcessError, FileNotFoundError):
-    messagebox.showerror("Error", "ffmpeg not found. Please install ffmpeg and ensure it is in your PATH.")
+    messagebox.showerror("Error", "ffmpeg not found. Please install ffmpeg and ensure it is in same folder as the downloader.")
     sys.exit(1)
 
-# === Download hook ===
+# Download hook
 def my_hook(d):
     if d['status'] == 'finished':
         filename = d.get('filename', 'Unknown File')
         status_label.config(text=f"Download complete: {filename}")
         root.update_idletasks()
 
-# === Download logic ===
+# Sanitise filename
+def Sanitise_filename(name: str, default_name="unknown_song") -> str:
+    name = re.sub(r'[<>:"/\\|?*\n\r\t]', '', name)  # Remove forbidden characters
+
+    reserved = {"CON", "PRN", "AUX", "NUL", "COM1", "LPT1", "COM2", "LPT2",
+                "COM3", "LPT3", "COM4", "LPT4", "COM5", "LPT5", "COM6",
+                "LPT6", "COM7", "LPT7", "COM8", "LPT8", "COM9", "LPT9"}
+    if name.upper() in reserved or name.strip('.') == '' or not name.strip():
+        return default_name
+
+    return name
+    
+# Download logic
 def audio_playlists():
     link = url_entry.get().strip()
     album_name = album_entry.get().strip()
@@ -75,7 +86,8 @@ def audio_playlists():
     os.makedirs(album_folder, exist_ok=True)
 
     for track_counter, track in enumerate(entries, start=1):
-        track_title = track.get('title', f"Track {track_counter}")
+        raw_title = track.get('title', f"Track {track_counter}")
+        track_title = Sanitise_filename(raw_title)
         artist_name = track.get('uploader', 'Unknown Artist')
         print(f"Downloading: {track_title}")
 
@@ -104,7 +116,7 @@ def audio_playlists():
         with YoutubeDL(ydl_opts_download) as ydl:
             ydl.download([track['url']])
 
-        # === Embed album art with ffmpeg ===
+        #Embed album art with ffmpeg
         if (album_art):
             tagged_output = os.path.join(album_folder, f"{track_title}_tagged.mp3")
 
@@ -165,7 +177,8 @@ def audio_singles():
     ydl_opts_info = {'quiet': True}
     with YoutubeDL(ydl_opts_info) as ydl:
         info_dict = ydl.extract_info(link, download=False)
-        track_title = info_dict.get('title', 'Unknown Song')
+        raw_title = info_dict.get('title', 'Unknown Song')
+        track_title = Sanitise_filename(raw_title)
         artist_name = info_dict.get('uploader', 'Unknown Artist')
         album_name = album_name if album_name else track_title
 
@@ -289,7 +302,7 @@ def video_singles():
 
     status_label.config(text="Video download complete!")
 
-# === GUI helper functions ===
+# GUI helper functions
 def select_directory():
     folder_selected = filedialog.askdirectory()
     if folder_selected:
@@ -302,7 +315,7 @@ def select_artwork():
         artwork_entry.delete(0, tk.END)
         artwork_entry.insert(0, file_selected)
 
-# === GUI Setup ===
+# GUI Setup
 try:
     root = tk.Tk()
     root.title("YouTube Downloader")
